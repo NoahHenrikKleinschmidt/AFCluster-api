@@ -61,6 +61,9 @@ determined eps=8.0
 >>> clusterer.write_cluster_table("clustered_results/clusters.csv")
 ```
 
+![](support/performance/afcluster_fixed_eps_dual_visual/pca.png)
+> The PCA plot generated with `clusterer.pca()`. A difference to the original implementation is that we do not simply highlight the first 10 (default) clusters but the 10 biggest clusters instead. 
+
 ## Comparison to the Original
 Since we did some code refactoring, we also benchmarked the performance of our implementation versus Wayment-Steele et al.'s original version. We found that our refactored code base runs in roughly half the time that the original implementation required. A workflow invloving a gridsearch for a suitable epsilon value even ran three times faster compared to the original `ClusterMSA.py` script.  
 
