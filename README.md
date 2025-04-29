@@ -3,6 +3,15 @@
 A Python-API version of AF_Cluster by [Wayment-Steele et al. (2023)](https://doi.org/10.1038/s41586-023-06832-9) In their [original GitHub repository](https://github.com/HWaymentSteele/AF_Cluster)
 they include scripts to perform MSA clustering but do not have a functional API interface that easily allows integrating their workflow into custom settings. This project adapts and refactors their original `ClusterMSA.py` script into a API format.
 
+# Installation
+
+The AFCluster-api version can be install via pip using
+
+```bash
+pip install afcluster
+```
+
+
 ## Usage
 
 The core of the API is the `AFCluster` object which unifies the complete functionality of the package under one hood, including:
