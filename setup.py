@@ -4,6 +4,7 @@ setup(
     name="afcluster",
     version="0.1.0",
     description="Cluster Multiple-Sequence Alignments (MSA) using DBSCAN",
+    long_description=open("README.md").read(),
     author="Noah Kleinschmidt",
     author_email="noah.kleinschmidt@unibe.ch",
     url="https://github.com/NoahHenrikKleinschmidt/AFCluster-api",
