@@ -5,7 +5,7 @@ Code adapted from
 https://github.com/HWaymentSteele/AF_Cluster/blob/main/scripts/ClusterMSA.py
 """
 
-from typing import List, Union
+from typing import Iterable, List, Union
 import numpy as np
 import pandas as pd
 from polyleven import levenshtein as _levenshtein
@@ -303,6 +303,7 @@ class AFCluster:
     def gridsearch_eps(
         self,
         msa: Union[List[str], pd.DataFrame, pd.Series],
+        desired_clusters: Union[str, int] = "max",
         min_eps: float = 3,
         max_eps: float = 20,
         step: float = 0.5,
@@ -310,6 +311,7 @@ class AFCluster:
         max_gap_frac: float = 0.25,
         min_samples: int = 3,
         n_processes: int = 1,
+        mode: str = "fast",
     ) -> float:
         """
         Perform a grid search to find the best epsilon value for DBSCAN clustering.
@@ -319,6 +321,10 @@ class AFCluster:
         msa : List or DataFrame or Series
             The MSA to cluster. This can be a list of (aligned) sequences, a pandas DataFrame with a "sequence" column, or a pandas Series containing sequences.
             In any case, the first sequence is interpreted as the query sequence.
+        desired_clusters : str or int
+            The desired number of clusters to obtain with the best epsilon value.
+            If "max", the epsilon value that yields the maximum number of clusters is returned.
+            If an integer is given, the epsilon value that yields this number of clusters (or the closest to it) is returned.
         min_eps : float
             The minimum epsilon value to test.
         max_eps : float
@@ -334,19 +340,25 @@ class AFCluster:
         n_processes: int
             If a number bigger than 1 is given, the grid search is performed using
             multiprocessing. Otherwise, the grid search is performed using a single process.
+        mode : str, optional
+            The mode of grid search to perform. Can be "exhaustive" or "fast". Default is "exhaustive".
+            Use "fast" for a faster search on large datasets that uses repeated sampling and averaging on a very small part of the data.
 
         Returns
         -------
         float
             The best epsilon value found during the grid search. This value is also stored in the class instance for later use with the cluster method.
         """
+        from .search_eps import gridsearch
+
         df = self._precheck_data(msa)
         query_seq, df = self._preprocess_data(
-            df,
-            max_gap_frac=max_gap_frac,
-            resample=True,
-            resample_frac=data_frac,
+            df, max_gap_frac=max_gap_frac, resample=False, resample_frac=0.0
         )
+        # now take only every n-th row so that the df becomes size * data_frac
+        if data_frac < 1:
+            df = df[:: int(1 / data_frac)]
+
         if len(df) < 2:
             raise ValueError(
                 "The MSA must contain at least 2 sequences to perform clustering."
@@ -357,32 +369,18 @@ class AFCluster:
             )
         if step <= 0:
             raise ValueError("step must be greater than 0. Please check the value.")
-
-        eps_values = np.arange(min_eps, max_eps + step, step)
-
-        if n_processes > 1:
-            from joblib import Parallel, delayed
-
-            def _run_dbscan_for_eps(eps):
-                labels = _run_dbscan(
-                    df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
-                )
-                return np.unique(labels).shape[0]
-
-            results = Parallel(n_jobs=n_processes)(
-                delayed(_run_dbscan_for_eps)(eps) for eps in eps_values
-            )
-        else:
-            results = [-1] * len(eps_values)
-            for idx, eps in enumerate(eps_values):
-                labels = _run_dbscan(
-                    df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
-                )
-                results[idx] = np.unique(labels).shape[0]
-
-        # Find the best epsilon value
-        best_eps_index = np.argmax(results)
-        best_eps = eps_values[best_eps_index]
+        best_eps = gridsearch(
+            df=df,
+            query=query_seq,
+            min_eps=min_eps,
+            max_eps=max_eps,
+            step=step,
+            desired_clusters=desired_clusters,
+            max_gap_frac=max_gap_frac,
+            min_samples=min_samples,
+            n_processes=n_processes,
+            mode=mode,
+        )
         self._eps = best_eps
         return best_eps
 
@@ -621,23 +619,89 @@ def _compute_levenshtein_distance(clustered_df, query_seq):
     return clustered_df
 
 
+DEFAULT_ENCODING = "onehot"
+"""
+The encoding method to use to turn the sequences into numeric vectors.
+Can be "onehot" or "numvec".
+
+"onehot" : One-hot encoding
+    Each amino acid is represented by a vector of length 20, with a 1 in the position of the amino acid and 0s elsewhere.
+    The sequence is padded with zeros to the right to make it of length max_len.
+    The resulting array has shape (n_sequences, max_len * 20).
+"numvec" : Numeric vector encoding
+    Each amino acid is represented by a number from 1 to 20, with 21 for gaps, 0 for unknown/empty.
+    The sequence is padded with zeros to the right to make it of length max_len.
+    The resulting array has shape (n_sequences, max_len).
+"""
+
+
+def encode_sequences(
+    sequences: Iterable[str],
+    max_len: int = 108,
+    method: str = None,
+):
+    """
+    Encode sequences using the specified method.
+
+    Parameters
+    ----------
+    sequences : iterable of str
+        The sequences to encode.
+    max_len : int
+        The maximum length of the sequences.
+    method : str
+        The encoding method to use. Can be "onehot" or "numvec".
+        The `DEFAULT_ENCODING` constant is used if method is None.
+
+    Returns
+    -------
+    np.ndarray
+        The encoded sequences.
+    """
+    if method is None:
+        method = DEFAULT_ENCODING
+    if method == "onehot":
+        return _seqs_to_onehot(sequences, max_len=max_len)
+    elif method == "numvec":
+        return _seqs_to_numvec(sequences, max_len=max_len)
+    else:
+        raise ValueError(f"Unknown encoding method: {method}")
+
+
 def _run_dbscan(df, eps, min_samples, query_length) -> np.ndarray:
-    sequences_onehot = _seqs_to_onehot(
+    encoded = encode_sequences(
         df["sequence"].values,
         max_len=query_length,
     )
 
     clustering = DBSCAN(
         eps=eps,
-        min_samples=min_samples,
+        min_samples=2 * query_length,
     ).fit(
-        sequences_onehot,
+        encoded,
     )
 
     return clustering.labels_
 
 
 __amino_acid_alphabet__ = "ACDEFGHIKLMNPQRSTVWY-"
+
+
+def _seqs_to_numvec(seqs, max_len=108):
+    # Create a mapping of characters to indices
+    char_to_index = {char: idx for idx, char in enumerate(__amino_acid_alphabet__)}
+
+    # Initialize the one-hot encoded array
+    arr = np.zeros((len(seqs), max_len), dtype=np.float32)
+
+    for j, seq in enumerate(seqs):
+        for i, char in enumerate(seq):
+            if i >= max_len:
+                break
+            if char in char_to_index:
+                arr[j, i] = char_to_index[char] + 1
+
+    return arr
 
 
 def _seqs_to_onehot(seqs, max_len=108):
