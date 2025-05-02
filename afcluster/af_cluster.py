@@ -5,7 +5,7 @@ Code adapted from
 https://github.com/HWaymentSteele/AF_Cluster/blob/main/scripts/ClusterMSA.py
 """
 
-from typing import List, Union
+from typing import Iterable, List, Union
 import numpy as np
 import pandas as pd
 from polyleven import levenshtein as _levenshtein
@@ -17,6 +17,7 @@ def afcluster(
     msa: Union[List[str], pd.DataFrame, pd.Series],
     eps: float = None,
     min_samples: int = 3,
+    columns: list = None,
     max_gap_frac: float = 0.25,
     resample: bool = False,
     resample_frac: float = 1.0,
@@ -42,6 +43,9 @@ def afcluster(
         For this, the eps_range and eps_step parameters are used.
     min_samples : int
         The minimum number of sequences in a cluster for the cluster to be accepted.
+    columns : List[str]
+        If a dataframe is passed, additional columns can also be included in the clustering.
+        In these cases the columns must be numeric! By default, only the "sequence" column is used, any columns that are provided here are added to the clustering data.
     max_gap_frac : float
         Filter out sequences with more than this fraction of gaps.
         Set to 0 to remove all sequences with gaps, set to 1 to keep all sequences.
@@ -127,6 +131,7 @@ class AFCluster:
         msa: Union[List[str], pd.DataFrame, pd.Series],
         eps: float = None,
         min_samples: int = 3,
+        columns: List[str] = None,
         max_gap_frac: float = 0.25,
         resample: bool = False,
         resample_frac: float = 1.0,
@@ -147,6 +152,9 @@ class AFCluster:
             Epsilon value for DBSCAN clustering. If a search was done beforehand, the best value is remembered by the class.
         min_samples : int
             The minimum number of sequences in a cluster for the clsuter to be accepted.
+        columns : List[str]
+            If a dataframe is passed, additional columns can also be included in the clustering.
+            In these cases the columns must be numeric!
         max_gap_frac : float
             The maximum fraction of gaps allowed in a sequence.
             Set to 0 to remove all sequences with gaps, set to 1 to keep all sequences.
@@ -196,8 +204,13 @@ class AFCluster:
             f"Resampled MSA from {old_len} to {new_len} sequences (resample={resample}, resample_frac={resample_frac}, max_gap_frac={max_gap_frac})"
         )
 
+        if columns is not None:
+            _df = df[["sequence"] + columns]
+        else:
+            _df = df[["sequence"]]
+
         labels = _run_dbscan(
-            df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
+            df=_df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
         )
         df["cluster_id"] = labels
 
@@ -211,6 +224,9 @@ class AFCluster:
 
         # insert the query sequence back as first row
         query_df = pd.DataFrame({"sequence": [query_seq], "cluster_id": [-1]})
+        if "header" in df.columns:
+            query_df["header"] = ["101"]
+
         df = pd.concat([query_df, df], ignore_index=True)
         df = df.reset_index(drop=True)
 
@@ -303,6 +319,7 @@ class AFCluster:
     def gridsearch_eps(
         self,
         msa: Union[List[str], pd.DataFrame, pd.Series],
+        desired_clusters: Union[str, int] = "max",
         min_eps: float = 3,
         max_eps: float = 20,
         step: float = 0.5,
@@ -310,6 +327,7 @@ class AFCluster:
         max_gap_frac: float = 0.25,
         min_samples: int = 3,
         n_processes: int = 1,
+        mode: str = "fast",
     ) -> float:
         """
         Perform a grid search to find the best epsilon value for DBSCAN clustering.
@@ -319,6 +337,10 @@ class AFCluster:
         msa : List or DataFrame or Series
             The MSA to cluster. This can be a list of (aligned) sequences, a pandas DataFrame with a "sequence" column, or a pandas Series containing sequences.
             In any case, the first sequence is interpreted as the query sequence.
+        desired_clusters : str or int
+            The desired number of clusters to obtain with the best epsilon value.
+            If "max", the epsilon value that yields the maximum number of clusters is returned.
+            If an integer is given, the epsilon value that yields this number of clusters (or the closest to it) is returned.
         min_eps : float
             The minimum epsilon value to test.
         max_eps : float
@@ -334,19 +356,25 @@ class AFCluster:
         n_processes: int
             If a number bigger than 1 is given, the grid search is performed using
             multiprocessing. Otherwise, the grid search is performed using a single process.
+        mode : str, optional
+            The mode of grid search to perform. Can be "exhaustive" or "fast". Default is "exhaustive".
+            Use "fast" for a faster search on large datasets that uses repeated sampling and averaging on a very small part of the data.
 
         Returns
         -------
         float
             The best epsilon value found during the grid search. This value is also stored in the class instance for later use with the cluster method.
         """
+        from .search_eps import gridsearch
+
         df = self._precheck_data(msa)
         query_seq, df = self._preprocess_data(
-            df,
-            max_gap_frac=max_gap_frac,
-            resample=True,
-            resample_frac=data_frac,
+            df, max_gap_frac=max_gap_frac, resample=False, resample_frac=0.0
         )
+        # now take only every n-th row so that the df becomes size * data_frac
+        if data_frac < 1:
+            df = df[:: int(1 / data_frac)]
+
         if len(df) < 2:
             raise ValueError(
                 "The MSA must contain at least 2 sequences to perform clustering."
@@ -357,32 +385,17 @@ class AFCluster:
             )
         if step <= 0:
             raise ValueError("step must be greater than 0. Please check the value.")
-
-        eps_values = np.arange(min_eps, max_eps + step, step)
-
-        if n_processes > 1:
-            from joblib import Parallel, delayed
-
-            def _run_dbscan_for_eps(eps):
-                labels = _run_dbscan(
-                    df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
-                )
-                return np.unique(labels).shape[0]
-
-            results = Parallel(n_jobs=n_processes)(
-                delayed(_run_dbscan_for_eps)(eps) for eps in eps_values
-            )
-        else:
-            results = [-1] * len(eps_values)
-            for idx, eps in enumerate(eps_values):
-                labels = _run_dbscan(
-                    df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
-                )
-                results[idx] = np.unique(labels).shape[0]
-
-        # Find the best epsilon value
-        best_eps_index = np.argmax(results)
-        best_eps = eps_values[best_eps_index]
+        best_eps = gridsearch(
+            df=df,
+            query_seq=query_seq,
+            min_eps=min_eps,
+            max_eps=max_eps,
+            step=step,
+            desired_clusters=desired_clusters,
+            min_samples=min_samples,
+            n_processes=n_processes,
+            mode=mode,
+        )
         self._eps = best_eps
         return best_eps
 
@@ -390,6 +403,7 @@ class AFCluster:
         self,
         max_clusters_to_plot: int = 10,
         cmap: str = "tab10",
+        size: int = 10,
         ax=None,
         figsize=None,
         inplace: bool = False,
@@ -405,6 +419,8 @@ class AFCluster:
             exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
         cmap : str, optional
             The colormap to use for the clusters.
+        size : int, optional
+            The size of the points in the plot.
         ax : matplotlib.axes.Axes, optional
             The axes to plot on. If None, a new figure and axes will be created.
         figsize : tuple, optional
@@ -428,6 +444,7 @@ class AFCluster:
             self,
             max_clusters_to_plot=max_clusters_to_plot,
             cmap=cmap,
+            size=size,
             ax=ax,
             figsize=figsize,
             inplace=inplace,
@@ -438,6 +455,7 @@ class AFCluster:
         self,
         max_clusters_to_plot: int = 10,
         cmap: str = "tab10",
+        size: int = 10,
         ax=None,
         figsize=None,
         inplace: bool = False,
@@ -453,6 +471,8 @@ class AFCluster:
             exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
         cmap : str, optional
             The colormap to use for the clusters.
+        size : int, optional
+            The size of the points in the plot.
         ax : matplotlib.axes.Axes, optional
             The axes to plot on. If None, a new figure and axes will be created.
         figsize : tuple, optional
@@ -476,6 +496,7 @@ class AFCluster:
             self,
             max_clusters_to_plot=max_clusters_to_plot,
             cmap=cmap,
+            size=size,
             ax=ax,
             figsize=figsize,
             inplace=inplace,
@@ -621,23 +642,120 @@ def _compute_levenshtein_distance(clustered_df, query_seq):
     return clustered_df
 
 
-def _run_dbscan(df, eps, min_samples, query_length) -> np.ndarray:
-    sequences_onehot = _seqs_to_onehot(
+DEFAULT_ENCODING = "onehot"
+"""
+The encoding method to use to turn the sequences into numeric vectors.
+Can be "onehot" or "numvec".
+
+"onehot" : One-hot encoding
+    Each amino acid is represented by a vector of length 20, with a 1 in the position of the amino acid and 0s elsewhere.
+    The sequence is padded with zeros to the right to make it of length max_len.
+    The resulting array has shape (n_sequences, max_len * 20).
+"numvec" : Numeric vector encoding
+    Each amino acid is represented by a number from 1 to 20, with 21 for gaps, 0 for unknown/empty.
+    The sequence is padded with zeros to the right to make it of length max_len.
+    The resulting array has shape (n_sequences, max_len).
+"""
+
+
+def encode_clustering_data(
+    df: pd.DataFrame,
+    sequence_max_len: int = 108,
+    sequence_encoding_method: str = None,
+):
+    """
+    Encode the clustering data using the specified method.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe containing the sequences to encode.
+    sequence_max_len : int
+        The maximum length of the sequences.
+    sequence_encoding_method : str
+        The encoding method to use. Can be "onehot" or "numvec".
+        The `DEFAULT_ENCODING` constant is used if method is None.
+
+    Returns
+    -------
+    np.ndarray
+        The encoded sequences.
+    """
+    encoded_sequences = encode_sequences(
         df["sequence"].values,
-        max_len=query_length,
+        max_len=sequence_max_len,
+        method=sequence_encoding_method,
+    )
+    for col in df.columns:
+        if col not in ("sequence", "cluster_id", "consensus_sequence", "header"):
+            encoded_sequences = np.column_stack((encoded_sequences, df[col].values))
+    return encoded_sequences
+
+
+def encode_sequences(
+    sequences: Iterable[str],
+    max_len: int = 108,
+    method: str = None,
+):
+    """
+    Encode sequences using the specified method.
+
+    Parameters
+    ----------
+    sequences : iterable of str
+        The sequences to encode.
+    max_len : int
+        The maximum length of the sequences.
+    method : str
+        The encoding method to use. Can be "onehot" or "numvec".
+        The `DEFAULT_ENCODING` constant is used if method is None.
+
+    Returns
+    -------
+    np.ndarray
+        The encoded sequences.
+    """
+    if method is None:
+        method = DEFAULT_ENCODING
+    if method == "onehot":
+        return _seqs_to_onehot(sequences, max_len=max_len)
+    elif method == "numvec":
+        return _seqs_to_numvec(sequences, max_len=max_len)
+    else:
+        raise ValueError(f"Unknown encoding method: {method}")
+
+
+def _run_dbscan(df, eps, min_samples, query_length) -> np.ndarray:
+    encoded = encode_clustering_data(
+        df,
+        sequence_max_len=query_length,
     )
 
-    clustering = DBSCAN(
-        eps=eps,
-        min_samples=min_samples,
-    ).fit(
-        sequences_onehot,
+    clustering = DBSCAN(eps=eps, min_samples=min_samples or 2 * len(encoded[0])).fit(
+        encoded,
     )
 
     return clustering.labels_
 
 
 __amino_acid_alphabet__ = "ACDEFGHIKLMNPQRSTVWY-"
+
+
+def _seqs_to_numvec(seqs, max_len=108):
+    # Create a mapping of characters to indices
+    char_to_index = {char: idx for idx, char in enumerate(__amino_acid_alphabet__)}
+
+    # Initialize the one-hot encoded array
+    arr = np.zeros((len(seqs), max_len), dtype=np.float32)
+
+    for j, seq in enumerate(seqs):
+        for i, char in enumerate(seq):
+            if i >= max_len:
+                break
+            if char in char_to_index:
+                arr[j, i] = char_to_index[char] + 1
+
+    return arr
 
 
 def _seqs_to_onehot(seqs, max_len=108):

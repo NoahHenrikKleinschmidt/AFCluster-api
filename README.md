@@ -87,4 +87,4 @@ Since we did some code refactoring, we also benchmarked the performance of our i
 |ours| search eps + cluster + pca + tsne| 98.22|
 |original| search eps + cluster + pca + tsne| 153.63|
 
-> Computation times are averages. Performance measures were computed using the scripts in the `support/performance` directory, on an M4 Macbook Pro (2024) using 5 repeats each.
+> Computation times are averages. Performance measures were computed using the scripts in the `support/performance` directory, on an M4 Macbook Pro (2024) using 5 repeats each and an MSA with 19K sequences.
