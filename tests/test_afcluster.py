@@ -377,7 +377,41 @@ def test_cluster_with_additional_columns():
         df,
         eps=8,
         resample=False,
-        # columns=["test", "test2"],
+        columns=["test", "test2"],
+        consensus_sequence=True,
+        levenshtein=True,
+        min_samples=10,
+    )
+    assert df is not None
+    assert "cluster_id" in df.columns
+    assert "consensus_sequence" in df.columns
+    assert "levenshtein_query" in df.columns
+    assert "levenshtein_consensus" in df.columns
+    assert "header" in df.columns
+    assert "sequence" in df.columns
+
+
+def test_cluster_toplevel_with_additional_columns():
+    from afcluster import afcluster
+    from afcluster.utils import read_a3m
+    import numpy as np
+
+    df = read_a3m(test1_data)
+    assert df is not None
+    assert "sequence" in df.columns
+    assert "header" in df.columns
+
+    # add some random valued test column
+    df["test"] = np.random.rand(len(df))
+
+    # and a categorical random one
+    df["test2"] = np.random.choice([0, 1, 2], len(df))
+
+    df, clusterer = afcluster(
+        df,
+        eps=8,
+        resample=False,
+        columns=["test", "test2"],
         consensus_sequence=True,
         levenshtein=True,
         min_samples=10,

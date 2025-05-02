@@ -17,6 +17,7 @@ def afcluster(
     msa: Union[List[str], pd.DataFrame, pd.Series],
     eps: float = None,
     min_samples: int = 3,
+    columns: list = None,
     max_gap_frac: float = 0.25,
     resample: bool = False,
     resample_frac: float = 1.0,
@@ -42,6 +43,9 @@ def afcluster(
         For this, the eps_range and eps_step parameters are used.
     min_samples : int
         The minimum number of sequences in a cluster for the cluster to be accepted.
+    columns : List[str]
+        If a dataframe is passed, additional columns can also be included in the clustering.
+        In these cases the columns must be numeric! By default, only the "sequence" column is used, any columns that are provided here are added to the clustering data.
     max_gap_frac : float
         Filter out sequences with more than this fraction of gaps.
         Set to 0 to remove all sequences with gaps, set to 1 to keep all sequences.
