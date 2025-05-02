@@ -15,6 +15,7 @@ def pca(
     clusterer: AFCluster,
     max_clusters_to_plot: int = 10,
     cmap: str = "tab10",
+    size: int = 10,
     ax=None,
     figsize=None,
     inplace: bool = False,
@@ -32,6 +33,8 @@ def pca(
         exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
     cmap : str, optional
         The colormap to use for the clusters.
+    size : int, optional
+        The size of the points in the plot.
     ax : matplotlib.axes.Axes, optional
         The axes to plot on. If None, a new figure and axes will be created.
     figsize : tuple, optional
@@ -60,6 +63,7 @@ def pca(
         ax=ax,
         max_clusters_to_plot=max_clusters_to_plot,
         cmap=cmap,
+        size=size,
         **kwargs,
     )
 
@@ -73,6 +77,7 @@ def tsne(
     clusterer: AFCluster,
     max_clusters_to_plot: int = 10,
     cmap: str = "tab10",
+    size: int = 10,
     ax=None,
     figsize=None,
     inplace: bool = False,
@@ -90,6 +95,8 @@ def tsne(
         exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
     cmap : str, optional
         The colormap to use for the clusters.
+    size : int, optional
+        The size of the points in the plot.
     ax : matplotlib.axes.Axes, optional
         The axes to plot on. If None, a new figure and axes will be created.
     figsize : tuple, optional
@@ -117,6 +124,7 @@ def tsne(
         ax=ax,
         max_clusters_to_plot=max_clusters_to_plot,
         cmap=cmap,
+        size=size,
         **kwargs,
     )
 
@@ -131,6 +139,7 @@ def _plot_pca(
     ax=None,
     max_clusters_to_plot: int = 10,
     cmap: str = "tab10",
+    size: int = 10,
     **kwargs,
 ):
     # prepare sequences
@@ -174,6 +183,7 @@ def _plot_pca(
         color="lightgray",
         marker="x",
         label="unclustered",
+        s=size,
     )
 
     # get the top max_clusters_to_plot clusteres
@@ -190,6 +200,7 @@ def _plot_pca(
         color="darkgray",
         marker="x",
         label="other clusters",
+        s=size,
     )
 
     # plot clusters
@@ -202,13 +213,14 @@ def _plot_pca(
         data=clustered,
         palette=cmap,
         ax=ax,
+        s=size,
     )
     ax.scatter(
         query["PC 1"],
         query["PC 2"],
         color="red",
         marker="*",
-        s=150,
+        s=size * 5,
         label="query",
     )
     ax.legend(bbox_to_anchor=(1, 1), frameon=False)
@@ -227,6 +239,7 @@ def _plot_tsne(
     ax=None,
     max_clusters_to_plot: int = 10,
     cmap: str = "tab10",
+    size: int = 10,
     **kwargs,
 ):
     if ax is None:
@@ -261,6 +274,7 @@ def _plot_tsne(
         color="lightgray",
         marker="x",
         label="unclustered",
+        s=size,
     )
 
     # get the top max_clusters_to_plot clusteres
@@ -276,6 +290,7 @@ def _plot_tsne(
         color="darkgray",
         marker="x",
         label="other clusters",
+        s=size,
     )
 
     # plot clusters
@@ -288,6 +303,7 @@ def _plot_tsne(
         data=clustered,
         palette=cmap,
         ax=ax,
+        s=size,
     )
 
     ax.scatter(
@@ -295,7 +311,7 @@ def _plot_tsne(
         query["t-SNE 2"],
         color="red",
         marker="*",
-        s=150,
+        s=size * 5,
         label="query",
     )
     ax.legend(bbox_to_anchor=(1, 1), frameon=False)

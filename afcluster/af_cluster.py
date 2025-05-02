@@ -388,6 +388,7 @@ class AFCluster:
         self,
         max_clusters_to_plot: int = 10,
         cmap: str = "tab10",
+        size: int = 10,
         ax=None,
         figsize=None,
         inplace: bool = False,
@@ -403,6 +404,8 @@ class AFCluster:
             exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
         cmap : str, optional
             The colormap to use for the clusters.
+        size : int, optional
+            The size of the points in the plot.
         ax : matplotlib.axes.Axes, optional
             The axes to plot on. If None, a new figure and axes will be created.
         figsize : tuple, optional
@@ -426,6 +429,7 @@ class AFCluster:
             self,
             max_clusters_to_plot=max_clusters_to_plot,
             cmap=cmap,
+            size=size,
             ax=ax,
             figsize=figsize,
             inplace=inplace,
@@ -436,6 +440,7 @@ class AFCluster:
         self,
         max_clusters_to_plot: int = 10,
         cmap: str = "tab10",
+        size: int = 10,
         ax=None,
         figsize=None,
         inplace: bool = False,
@@ -451,6 +456,8 @@ class AFCluster:
             exceeds this, only the first `max_clusters_to_plot` clusters will be plotted individually, while all others are considered as "other".
         cmap : str, optional
             The colormap to use for the clusters.
+        size : int, optional
+            The size of the points in the plot.
         ax : matplotlib.axes.Axes, optional
             The axes to plot on. If None, a new figure and axes will be created.
         figsize : tuple, optional
@@ -474,6 +481,7 @@ class AFCluster:
             self,
             max_clusters_to_plot=max_clusters_to_plot,
             cmap=cmap,
+            size=size,
             ax=ax,
             figsize=figsize,
             inplace=inplace,
