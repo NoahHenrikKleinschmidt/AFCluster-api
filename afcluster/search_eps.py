@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from .af_cluster import _run_dbscan, encode_sequences
+from .af_cluster import _run_dbscan
 
 
 def gridsearch(
