@@ -354,3 +354,38 @@ def test_dev_gridsearch_small_but_repeated():
     )
     n_clusters = len(out.cluster_id.unique())
     assert abs(n_clusters - 15) <= 5, f"Expected around 15 clusters, got {n_clusters}"
+
+
+def test_cluster_with_additional_columns():
+    from afcluster import AFCluster
+    from afcluster.utils import read_a3m
+    import numpy as np
+
+    clusterer = AFCluster()
+    df = read_a3m(test1_data)
+    assert df is not None
+    assert "sequence" in df.columns
+    assert "header" in df.columns
+
+    # add some random valued test column
+    df["test"] = np.random.rand(len(df))
+
+    # and a categorical random one
+    df["test2"] = np.random.choice([0, 1, 2], len(df))
+
+    df = clusterer.cluster(
+        df,
+        eps=8,
+        resample=False,
+        # columns=["test", "test2"],
+        consensus_sequence=True,
+        levenshtein=True,
+        min_samples=10,
+    )
+    assert df is not None
+    assert "cluster_id" in df.columns
+    assert "consensus_sequence" in df.columns
+    assert "levenshtein_query" in df.columns
+    assert "levenshtein_consensus" in df.columns
+    assert "header" in df.columns
+    assert "sequence" in df.columns

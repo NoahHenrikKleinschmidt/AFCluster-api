@@ -127,6 +127,7 @@ class AFCluster:
         msa: Union[List[str], pd.DataFrame, pd.Series],
         eps: float = None,
         min_samples: int = 3,
+        columns: List[str] = None,
         max_gap_frac: float = 0.25,
         resample: bool = False,
         resample_frac: float = 1.0,
@@ -147,6 +148,9 @@ class AFCluster:
             Epsilon value for DBSCAN clustering. If a search was done beforehand, the best value is remembered by the class.
         min_samples : int
             The minimum number of sequences in a cluster for the clsuter to be accepted.
+        columns : List[str]
+            If a dataframe is passed, additional columns can also be included in the clustering.
+            In these cases the columns must be numeric!
         max_gap_frac : float
             The maximum fraction of gaps allowed in a sequence.
             Set to 0 to remove all sequences with gaps, set to 1 to keep all sequences.
@@ -196,8 +200,13 @@ class AFCluster:
             f"Resampled MSA from {old_len} to {new_len} sequences (resample={resample}, resample_frac={resample_frac}, max_gap_frac={max_gap_frac})"
         )
 
+        if columns is not None:
+            _df = df[["sequence"] + columns]
+        else:
+            _df = df[["sequence"]]
+
         labels = _run_dbscan(
-            df=df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
+            df=_df, eps=eps, min_samples=min_samples, query_length=len(query_seq)
         )
         df["cluster_id"] = labels
 
@@ -211,6 +220,9 @@ class AFCluster:
 
         # insert the query sequence back as first row
         query_df = pd.DataFrame({"sequence": [query_seq], "cluster_id": [-1]})
+        if "header" in df.columns:
+            query_df["header"] = ["101"]
+
         df = pd.concat([query_df, df], ignore_index=True)
         df = df.reset_index(drop=True)
 
@@ -643,6 +655,40 @@ Can be "onehot" or "numvec".
 """
 
 
+def encode_clustering_data(
+    df: pd.DataFrame,
+    sequence_max_len: int = 108,
+    sequence_encoding_method: str = None,
+):
+    """
+    Encode the clustering data using the specified method.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe containing the sequences to encode.
+    sequence_max_len : int
+        The maximum length of the sequences.
+    sequence_encoding_method : str
+        The encoding method to use. Can be "onehot" or "numvec".
+        The `DEFAULT_ENCODING` constant is used if method is None.
+
+    Returns
+    -------
+    np.ndarray
+        The encoded sequences.
+    """
+    encoded_sequences = encode_sequences(
+        df["sequence"].values,
+        max_len=sequence_max_len,
+        method=sequence_encoding_method,
+    )
+    for col in df.columns:
+        if col not in ("sequence", "cluster_id", "consensus_sequence", "header"):
+            encoded_sequences = np.column_stack((encoded_sequences, df[col].values))
+    return encoded_sequences
+
+
 def encode_sequences(
     sequences: Iterable[str],
     max_len: int = 108,
@@ -677,15 +723,12 @@ def encode_sequences(
 
 
 def _run_dbscan(df, eps, min_samples, query_length) -> np.ndarray:
-    encoded = encode_sequences(
-        df["sequence"].values,
-        max_len=query_length,
+    encoded = encode_clustering_data(
+        df,
+        sequence_max_len=query_length,
     )
 
-    clustering = DBSCAN(
-        eps=eps,
-        min_samples=2 * query_length,
-    ).fit(
+    clustering = DBSCAN(eps=eps, min_samples=min_samples or 2 * len(encoded[0])).fit(
         encoded,
     )
 
