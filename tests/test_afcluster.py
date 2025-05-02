@@ -54,8 +54,8 @@ def test_can_gridsearch_eps_simple():
     clusterer = AFCluster()
     eps = clusterer.gridsearch_eps(
         seqs1,
-        min_eps=3,
-        max_eps=5,
+        min_eps=3.0,
+        max_eps=5.0,
         step=1,
     )
     assert eps is not None
@@ -68,8 +68,8 @@ def test_can_gridsearch_eps_multiprocess():
     clusterer = AFCluster()
     eps = clusterer.gridsearch_eps(
         seqs1,
-        min_eps=3,
-        max_eps=5,
+        min_eps=3.0,
+        max_eps=5.0,
         step=1,
         n_processes=3,
     )

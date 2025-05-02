@@ -93,6 +93,7 @@ def gridsearch_exhaustive(
     min_samples=3,
     n_processes=1,
     early_stop=-1,
+    **kwargs,
 ) -> float:
     """
     Perform an exhaustive grid search to find the best epsilon value for DBSCAN from a given range.
@@ -151,6 +152,7 @@ def gridsearch_fast(
     fraction=0.05,
     alpha=1.5,
     n_repeats=15,
+    **kwargs,
 ) -> float:
     """
     Perform a grid search to find the best epsilon value for DBSCAN from a given range, using a fraction of the data.

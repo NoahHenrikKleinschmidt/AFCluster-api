@@ -387,12 +387,11 @@ class AFCluster:
             raise ValueError("step must be greater than 0. Please check the value.")
         best_eps = gridsearch(
             df=df,
-            query=query_seq,
+            query_seq=query_seq,
             min_eps=min_eps,
             max_eps=max_eps,
             step=step,
             desired_clusters=desired_clusters,
-            max_gap_frac=max_gap_frac,
             min_samples=min_samples,
             n_processes=n_processes,
             mode=mode,
